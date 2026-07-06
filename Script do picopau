@@ -1,0 +1,253 @@
+local Players = game:GetService("Players")
+local RunService = game:GetService("RunService")
+local UserInputService = game:GetService("UserInputService")
+local TweenService = game:GetService("TweenService")
+local LocalPlayer = Players.LocalPlayer
+local Camera = workspace.CurrentCamera
+
+local ESP = {}
+local Aimbot = {}
+local UI = {}
+
+-- Configurações ESP
+ESP.Config = {
+    Enabled = true,
+    BoxColor = Color3.new(1, 0, 0),
+    LineColor = Color3.new(0, 1, 0),
+    ShowBox = true,
+    ShowLines = true,
+    ShowName = true,
+    ShowHealth = true,
+    TeamCheck = true
+}
+
+-- Configurações Aimbot
+Aimbot.Config = {
+    Enabled = false,
+    TeamCheck = true,
+    Smoothness = 0.1,
+    TargetPart = "Head"
+}
+
+-- Funções ESP
+function ESP:Create(Player)
+    if Player == LocalPlayer then return end
+    
+    local function SetupESP()
+        local Character = Player.Character or Player.CharacterAdded:Wait()
+        local RootPart = Character:WaitForChild("HumanoidRootPart", 5)
+        local Humanoid = Character:WaitForChild("Humanoid", 5)
+        
+        if not RootPart or not Humanoid then return end
+        
+        local ESPFolder = Instance.new("Folder")
+        ESPFolder.Name = "ESP_" .. Player.Name
+        ESPFolder.Parent = Camera
+        
+        -- Box
+        local Box = Instance.new("BoxHandleAdornment")
+        Box.Size = Vector3.new(4, 5, 2)
+        Box.Color3 = ESP.Config.BoxColor
+        Box.Transparency = 0.7
+        Box.ZIndex = 10
+        Box.AlwaysOnTop = true
+        Box.Visible = ESP.Config.ShowBox
+        Box.Parent = ESPFolder
+        
+        -- Line
+        local Line = Instance.new("LineHandleAdornment")
+        Line.Length = 0
+        Line.Color3 = ESP.Config.LineColor
+        Line.Transparency = 0.7
+        Line.ZIndex = 10
+        Line.AlwaysOnTop = true
+        Line.Visible = ESP.Config.ShowLines
+        Line.Parent = ESPFolder
+        
+        -- Name Tag
+        local NameTag = Instance.new("BillboardGui")
+        NameTag.Size = UDim2.new(0, 100, 0, 30)
+        NameTag.StudsOffset = Vector3.new(0, 3, 0)
+        NameTag.AlwaysOnTop = true
+        NameTag.Parent = ESPFolder
+        
+        local NameLabel = Instance.new("TextLabel")
+        NameLabel.Size = UDim2.new(1, 0, 1, 0)
+        NameLabel.BackgroundTransparency = 1
+        NameLabel.Text = Player.Name
+        NameLabel.TextColor3 = Color3.new(1, 1, 1)
+        NameLabel.TextStrokeTransparency = 0.5
+        NameLabel.TextScaled = true
+        NameLabel.Font = Enum.Font.SourceSansBold
+        NameLabel.Parent = NameTag
+        
+        -- Health Bar
+        local HealthBar = Instance.new("BillboardGui")
+        HealthBar.Size = UDim2.new(0, 5, 0, 30)
+        HealthBar.StudsOffset = Vector3.new(-3, 0, 0)
+        HealthBar.AlwaysOnTop = true
+        HealthBar.Parent = ESPFolder
+        
+        local HealthBarBG = Instance.new("Frame")
+        HealthBarBG.Size = UDim2.new(1, 0, 1, 0)
+        HealthBarBG.BackgroundColor3 = Color3.new(0.2, 0.2, 0.2)
+        HealthBarBG.BorderSizePixel = 0
+        HealthBarBG.Parent = HealthBar
+        
+        local HealthBarFill = Instance.new("Frame")
+        HealthBarFill.Size = UDim2.new(1, 0, 1, 0)
+        HealthBarFill.BackgroundColor3 = Color3.new(0, 1, 0)
+        HealthBarFill.BorderSizePixel = 0
+        HealthBarFill.Parent = HealthBarBG
+        
+        local Connection
+        Connection = RunService.RenderStepped:Connect(function()
+            if not Character or not Character.Parent or not Player.Parent then
+                ESPFolder:Destroy()
+                Connection:Disconnect()
+                return
+            end
+            
+            local IsVisible = ESP.Config.Enabled
+            if ESP.Config.TeamCheck and Player.Team == LocalPlayer.Team then
+                IsVisible = false
+            end
+            
+            Box.Visible = IsVisible and ESP.Config.ShowBox
+            Box.Adornee = Character
+            Box.Color3 = ESP.Config.BoxColor
+            
+            Line.Visible = IsVisible and ESP.Config.ShowLines
+            if Line.Visible then
+                local Origin = Camera.CFrame.Position - Vector3.new(0, 2, 0)
+                local Target = RootPart.Position
+                Line.CFrame = CFrame.new(Origin, Target)
+                Line.Length = (Origin - Target).Magnitude
+            end
+            
+            NameTag.Enabled = IsVisible and ESP.Config.ShowName
+            NameTag.Adornee = RootPart
+            
+            HealthBar.Enabled = IsVisible and ESP.Config.ShowHealth
+            HealthBar.Adornee = RootPart
+            if Humanoid then
+                local HealthPercent = math.clamp(Humanoid.Health / Humanoid.MaxHealth, 0, 1)
+                HealthBarFill.Size = UDim2.new(1, 0, HealthPercent, 0)
+                HealthBarFill.BackgroundColor3 = Color3.fromHSV(HealthPercent * 0.3, 1, 1)
+            end
+        end)
+    end
+    
+    SetupESP()
+    Player.CharacterAdded:Connect(SetupESP)
+end
+
+-- Funções Aimbot
+function Aimbot:GetClosestPlayer()
+    local ClosestPlayer = nil
+    local ClosestDistance = math.huge
+    
+    for _, Player in pairs(Players:GetPlayers()) do
+        if Player ~= LocalPlayer and Player.Character then
+            if not Aimbot.Config.TeamCheck or Player.Team ~= LocalPlayer.Team then
+                local TargetPart = Player.Character:FindFirstChild(Aimbot.Config.TargetPart)
+                if TargetPart then
+                    local ScreenPos, OnScreen = Camera:WorldToScreenPoint(TargetPart.Position)
+                    if OnScreen then
+                        local MousePos = UserInputService:GetMouseLocation()
+                        local Distance = (Vector2.new(ScreenPos.X, ScreenPos.Y) - MousePos).Magnitude
+                        if Distance < ClosestDistance then
+                            ClosestDistance = Distance
+                            ClosestPlayer = Player
+                        end
+                    end
+                end
+            end
+        end
+    end
+    return ClosestPlayer
+end
+
+RunService.RenderStepped:Connect(function()
+    if Aimbot.Config.Enabled then
+        local Target = Aimbot:GetClosestPlayer()
+        if Target and Target.Character then
+            local TargetPart = Target.Character:FindFirstChild(Aimbot.Config.TargetPart)
+            if TargetPart then
+                local LookAt = CFrame.new(Camera.CFrame.Position, TargetPart.Position)
+                Camera.CFrame = Camera.CFrame:Lerp(LookAt, Aimbot.Config.Smoothness)
+            end
+        end
+    end
+end)
+
+-- Interface UI (Versão Funcional Simplificada)
+function UI:Create()
+    local ScreenGui = Instance.new("ScreenGui")
+    ScreenGui.Name = "ManusMenu"
+    ScreenGui.ResetOnSpawn = false
+    -- Tenta CoreGui, se falhar vai para PlayerGui
+    local success, err = pcall(function() ScreenGui.Parent = game:GetService("CoreGui") end)
+    if not success then ScreenGui.Parent = LocalPlayer:WaitForChild("PlayerGui") end
+    
+    local MainFrame = Instance.new("Frame")
+    MainFrame.Size = UDim2.new(0, 200, 0, 250)
+    MainFrame.Position = UDim2.new(0, 50, 0.5, -125)
+    MainFrame.BackgroundColor3 = Color3.fromRGB(30, 30, 30)
+    MainFrame.BorderSizePixel = 2
+    MainFrame.Active = true
+    MainFrame.Draggable = true
+    MainFrame.Parent = ScreenGui
+    
+    local Title = Instance.new("TextLabel")
+    Title.Size = UDim2.new(1, 0, 0, 30)
+    Title.Text = "MANUS MENU"
+    Title.TextColor3 = Color3.new(1, 1, 1)
+    Title.BackgroundColor3 = Color3.fromRGB(50, 50, 50)
+    Title.Parent = MainFrame
+    
+    local function CreateButton(text, pos, callback)
+        local Btn = Instance.new("TextButton")
+        Btn.Size = UDim2.new(0.9, 0, 0, 35)
+        Btn.Position = pos
+        Btn.Text = text
+        Btn.BackgroundColor3 = Color3.fromRGB(60, 60, 60)
+        Btn.TextColor3 = Color3.new(1, 1, 1)
+        Btn.Parent = MainFrame
+        Btn.MouseButton1Click:Connect(callback)
+        return Btn
+    end
+    
+    local espBtn = CreateButton("ESP: ON", UDim2.new(0.05, 0, 0, 45), function()
+        ESP.Config.Enabled = not ESP.Config.Enabled
+        _G.ESP_Status = ESP.Config.Enabled and "ON" or "OFF"
+    end)
+    
+    local aimBtn = CreateButton("Aimbot: OFF", UDim2.new(0.05, 0, 0, 90), function()
+        Aimbot.Config.Enabled = not Aimbot.Config.Enabled
+        _G.Aim_Status = Aimbot.Config.Enabled and "ON" or "OFF"
+    end)
+    
+    local teamBtn = CreateButton("Team Check: ON", UDim2.new(0.05, 0, 0, 135), function()
+        ESP.Config.TeamCheck = not ESP.Config.TeamCheck
+        Aimbot.Config.TeamCheck = ESP.Config.TeamCheck
+        _G.Team_Status = ESP.Config.TeamCheck and "ON" or "OFF"
+    end)
+
+    -- Update button texts
+    RunService.RenderStepped:Connect(function()
+        espBtn.Text = "ESP: " .. (ESP.Config.Enabled and "ON" or "OFF")
+        aimBtn.Text = "Aimbot: " .. (Aimbot.Config.Enabled and "ON" or "OFF")
+        teamBtn.Text = "Team Check: " .. (ESP.Config.TeamCheck and "ON" or "OFF")
+    end)
+end
+
+-- Inicialização
+for _, player in pairs(Players:GetPlayers()) do
+    ESP:Create(player)
+end
+Players.PlayerAdded:Connect(function(player)
+    ESP:Create(player)
+end)
+
+UI:Create()
