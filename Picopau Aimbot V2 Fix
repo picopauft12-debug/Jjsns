@@ -1,0 +1,465 @@
+local Players = game:GetService("Players")
+local RunService = game:GetService("RunService")
+local UserInputService = game:GetService("UserInputService")
+local TweenService = game:GetService("TweenService")
+local LocalPlayer = Players.LocalPlayer
+local Camera = workspace.CurrentCamera
+
+-- Configurações Globais
+_G.Config = {
+    Aimbot = {
+        Enabled = false,
+        TeamCheck = true,
+        Instant = true,
+        Smoothness = 0.1,
+        TargetPart = "Head",
+    },
+    ESP = {
+        Enabled = true,
+        TeamCheck = true,
+        Box = true,
+        Lines = false,
+        Names = true,
+        Health = true,
+        Skeleton = false,
+        Transparency = 0.6,
+        Color = Color3.fromRGB(255, 0, 0) -- Cor padrão: Vermelho
+    }
+}
+
+-- TELA DE CARREGAMENTO
+local function ShowLoadingScreen()
+    local ScreenGui = Instance.new("ScreenGui")
+    ScreenGui.Name = "ManusLoading"
+    ScreenGui.DisplayOrder = 999
+    local success, err = pcall(function() ScreenGui.Parent = game:GetService("CoreGui") end)
+    if not success then ScreenGui.Parent = LocalPlayer:WaitForChild("PlayerGui") end
+
+    local Main = Instance.new("Frame")
+    Main.Size = UDim2.new(0, 350, 0, 180)
+    Main.Position = UDim2.new(0.5, -175, 0.5, -90)
+    Main.BackgroundColor3 = Color3.fromRGB(25, 25, 25)
+    Main.BorderSizePixel = 0
+    Main.Parent = ScreenGui
+    Instance.new("UICorner", Main).CornerRadius = UDim.new(0, 12)
+
+    local Title = Instance.new("TextLabel")
+    Title.Size = UDim2.new(1, 0, 0, 50)
+    Title.Text = "PICOPAU V2 | MANUS AI"
+    Title.TextColor3 = Color3.new(1, 1, 1)
+    Title.Font = Enum.Font.GothamBold
+    Title.TextSize = 22
+    Title.BackgroundTransparency = 1
+    Title.Parent = Main
+
+    local BarBG = Instance.new("Frame")
+    BarBG.Size = UDim2.new(0.8, 0, 0, 6)
+    BarBG.Position = UDim2.new(0.1, 0, 0.7, 0)
+    BarBG.BackgroundColor3 = Color3.fromRGB(45, 45, 45)
+    BarBG.Parent = Main
+    Instance.new("UICorner", BarBG)
+
+    local BarFill = Instance.new("Frame")
+    BarFill.Size = UDim2.new(0, 0, 1, 0)
+    BarFill.BackgroundColor3 = Color3.fromRGB(0, 120, 255)
+    BarFill.Parent = BarBG
+    Instance.new("UICorner", BarFill)
+
+    local Status = Instance.new("TextLabel")
+    Status.Size = UDim2.new(1, 0, 0, 30)
+    Status.Position = UDim2.new(0, 0, 0.5, 0)
+    Status.Text = "Iniciando sistema..."
+    Status.TextColor3 = Color3.fromRGB(200, 200, 200)
+    Status.Font = Enum.Font.Gotham
+    Status.TextSize = 14
+    Status.BackgroundTransparency = 1
+    Status.Parent = Main
+
+    task.spawn(function()
+        task.wait(0.5)
+        Status.Text = "Limpando menus antigos..."
+        
+        -- Mata loops e conexões antigas se possível
+        _G.PicopauV2_Active = false
+        task.wait(0.1)
+        _G.PicopauV2_Active = true
+
+        pcall(function()
+            local cg = game:GetService("CoreGui")
+            for _, v in pairs(cg:GetChildren()) do
+                if v.Name == "ManusMenu" or v.Name == "ManusV2" or (v.Name == "ManusLoading" and v ~= ScreenGui) then
+                    v:Destroy()
+                end
+            end
+            for _, v in pairs(LocalPlayer.PlayerGui:GetChildren()) do
+                if v.Name == "ManusMenu" or v.Name == "ManusV2" or (v.Name == "ManusLoading" and v ~= ScreenGui) then
+                    v:Destroy()
+                end
+            end
+        end)
+        
+        TweenService:Create(BarFill, TweenInfo.new(1), {Size = UDim2.new(0.7, 0, 1, 0)}):Play()
+        task.wait(1)
+        Status.Text = "Configurando Interface..."
+        TweenService:Create(BarFill, TweenInfo.new(0.5), {Size = UDim2.new(1, 0, 1, 0)}):Play()
+        task.wait(0.5)
+        ScreenGui:Destroy()
+        CreateMainUI()
+    end)
+end
+
+-- LÓGICA ESP
+local function CreateESP(Player)
+    if Player == LocalPlayer then return end
+    
+    local function Setup()
+        local Character = Player.Character or Player.CharacterAdded:Wait()
+        local Root = Character:WaitForChild("HumanoidRootPart", 10)
+        local Hum = Character:WaitForChild("Humanoid", 10)
+        if not Root or not Hum then return end
+
+        local Folder = Instance.new("Folder", Camera)
+        Folder.Name = "ESP_" .. Player.Name
+
+        local Box = Instance.new("BoxHandleAdornment", Folder)
+        Box.Size = Vector3.new(4, 5, 2)
+        Box.AlwaysOnTop = true
+        Box.ZIndex = 5
+        Box.Transparency = _G.Config.ESP.Transparency
+
+        local NameTag = Instance.new("BillboardGui", Folder)
+        NameTag.Size = UDim2.new(0, 100, 0, 20)
+        NameTag.AlwaysOnTop = true
+        NameTag.StudsOffset = Vector3.new(0, 3, 0)
+        local NameLabel = Instance.new("TextLabel", NameTag)
+        NameLabel.Size = UDim2.new(1, 0, 1, 0)
+        NameLabel.BackgroundTransparency = 1
+        NameLabel.TextColor3 = Color3.new(1, 1, 1)
+        NameLabel.Font = Enum.Font.GothamBold
+        NameLabel.TextSize = 12
+        NameLabel.Text = Player.Name
+
+        local HealthBar = Instance.new("BillboardGui", Folder)
+        HealthBar.Size = UDim2.new(0, 4, 0, 30)
+        HealthBar.AlwaysOnTop = true
+        HealthBar.StudsOffset = Vector3.new(-2.5, 0, 0)
+        local HealthFill = Instance.new("Frame", HealthBar)
+        HealthFill.Size = UDim2.new(1, 0, 1, 0)
+        HealthFill.BorderSizePixel = 0
+
+        local conn
+        conn = RunService.RenderStepped:Connect(function()
+            if not _G.PicopauV2_Active then
+                Folder:Destroy()
+                conn:Disconnect()
+                return
+            end
+            if not Character or not Character.Parent or not Player.Parent then 
+                Folder:Destroy() 
+                conn:Disconnect()
+                return 
+            end
+            
+            local Visible = _G.Config.ESP.Enabled
+            if _G.Config.ESP.TeamCheck and Player.Team == LocalPlayer.Team then Visible = false end
+            
+            Box.Visible = Visible and _G.Config.ESP.Box
+            Box.Adornee = Character
+            Box.Color3 = _G.Config.ESP.Color
+            
+            NameTag.Enabled = Visible and _G.Config.ESP.Names
+            NameTag.Adornee = Root
+            
+            HealthBar.Enabled = Visible and _G.Config.ESP.Health
+            HealthBar.Adornee = Root
+            local hp = math.clamp(Hum.Health / Hum.MaxHealth, 0, 1)
+            HealthFill.Size = UDim2.new(1, 0, hp, 0)
+            HealthFill.BackgroundColor3 = Color3.fromHSV(hp * 0.3, 1, 1)
+        end)
+    end
+    Setup()
+    Player.CharacterAdded:Connect(Setup)
+end
+
+-- LÓGICA AIMBOT
+RunService.RenderStepped:Connect(function()
+    if not _G.PicopauV2_Active then return end
+    if _G.Config.Aimbot.Enabled then
+        local Target = nil
+        local Dist = math.huge
+        for _, p in pairs(Players:GetPlayers()) do
+            if p ~= LocalPlayer and p.Character and p.Character:FindFirstChild(_G.Config.Aimbot.TargetPart) then
+                local Hum = p.Character:FindFirstChild("Humanoid")
+                if Hum and Hum.Health > 0 then
+                    if not _G.Config.Aimbot.TeamCheck or p.Team ~= LocalPlayer.Team then
+                        local Pos, OnScreen = Camera:WorldToScreenPoint(p.Character[_G.Config.Aimbot.TargetPart].Position)
+                        if OnScreen then
+                            local Mag = (Vector2.new(Pos.X, Pos.Y) - UserInputService:GetMouseLocation()).Magnitude
+                            if Mag < Dist then Dist = Mag Target = p end
+                        end
+                    end
+                end
+            end
+        end
+        
+        if Target then
+            local TargetPos = Target.Character[_G.Config.Aimbot.TargetPart].Position
+            if _G.Config.Aimbot.Instant then
+                Camera.CFrame = CFrame.new(Camera.CFrame.Position, TargetPos)
+            else
+                Camera.CFrame = Camera.CFrame:Lerp(CFrame.new(Camera.CFrame.Position, TargetPos), _G.Config.Aimbot.Smoothness)
+            end
+        end
+    end
+end)
+
+-- INTERFACE
+function CreateMainUI()
+    local ScreenGui = Instance.new("ScreenGui", game:GetService("CoreGui") or LocalPlayer.PlayerGui)
+    ScreenGui.Name = "ManusV2"
+    ScreenGui.ResetOnSpawn = false
+
+    local Main = Instance.new("Frame", ScreenGui)
+    Main.Size = UDim2.new(0, 450, 0, 350) -- Aumentado para caber créditos
+    Main.Position = UDim2.new(0.5, -225, 0.5, -175)
+    Main.BackgroundColor3 = Color3.fromRGB(18, 18, 18)
+    Main.BorderSizePixel = 0
+    Main.Active = true
+    Main.Draggable = true
+    Instance.new("UICorner", Main).CornerRadius = UDim.new(0, 10)
+
+    -- Top Bar
+    local Top = Instance.new("Frame", Main)
+    Top.Size = UDim2.new(1, 0, 0, 40)
+    Top.BackgroundTransparency = 1
+    local Title = Instance.new("TextLabel", Top)
+    Title.Size = UDim2.new(0, 300, 1, 0)
+    Title.Position = UDim2.new(0, 15, 0, 0)
+    Title.Text = "Picopau Aimbot V2 | Manus AI"
+    Title.TextColor3 = Color3.new(1, 1, 1)
+    Title.Font = Enum.Font.GothamBold
+    Title.TextSize = 16
+    Title.TextXAlignment = Enum.TextXAlignment.Left
+    Title.BackgroundTransparency = 1
+
+    -- Tab System
+    local TabContainer = Instance.new("Frame", Main)
+    TabContainer.Size = UDim2.new(1, -30, 0, 35)
+    TabContainer.Position = UDim2.new(0, 15, 0, 45)
+    TabContainer.BackgroundTransparency = 1
+    
+    local Content = Instance.new("Frame", Main)
+    Content.Size = UDim2.new(1, -30, 1, -130) -- Ajustado para créditos embaixo
+    Content.Position = UDim2.new(0, 15, 0, 90)
+    Content.BackgroundColor3 = Color3.fromRGB(25, 25, 25)
+    Instance.new("UICorner", Content)
+
+    -- Créditos (Fix 2)
+    local Credits = Instance.new("TextLabel", Main)
+    Credits.Size = UDim2.new(1, 0, 0, 30)
+    Credits.Position = UDim2.new(0, 0, 1, -30)
+    Credits.Text = "Créditos: picopau & Manus ai"
+    Credits.TextColor3 = Color3.fromRGB(150, 150, 150)
+    Credits.Font = Enum.Font.GothamItalic
+    Credits.TextSize = 14
+    Credits.BackgroundTransparency = 1
+
+    local Tabs = {}
+    local Pages = {}
+
+    local function CreateTab(name, order)
+        local Btn = Instance.new("TextButton", TabContainer)
+        Btn.Size = UDim2.new(0, 80, 1, 0)
+        Btn.Position = UDim2.new(0, (order-1) * 85, 0, 0)
+        Btn.Text = name
+        Btn.BackgroundColor3 = Color3.fromRGB(35, 35, 35)
+        Btn.TextColor3 = Color3.fromRGB(150, 150, 150)
+        Btn.Font = Enum.Font.GothamBold
+        Btn.TextSize = 14
+        Instance.new("UICorner", Btn)
+
+        local Page = Instance.new("ScrollingFrame", Content)
+        Page.Size = UDim2.new(1, -10, 1, -10)
+        Page.Position = UDim2.new(0, 5, 0, 5)
+        Page.BackgroundTransparency = 1
+        Page.Visible = false
+        Page.ScrollBarThickness = 2
+        Page.CanvasSize = UDim2.new(0, 0, 0, 400)
+        
+        local Layout = Instance.new("UIListLayout", Page)
+        Layout.Padding = UDim.new(0, 8)
+        Layout.HorizontalAlignment = Enum.HorizontalAlignment.Center
+
+        Btn.MouseButton1Click:Connect(function()
+            for _, p in pairs(Pages) do p.Visible = false end
+            for _, b in pairs(Tabs) do b.TextColor3 = Color3.fromRGB(150, 150, 150) b.BackgroundColor3 = Color3.fromRGB(35, 35, 35) end
+            Page.Visible = true
+            Btn.TextColor3 = Color3.new(1, 1, 1)
+            Btn.BackgroundColor3 = Color3.fromRGB(0, 120, 255)
+        end)
+
+        Tabs[name] = Btn
+        Pages[name] = Page
+        return Page
+    end
+
+    local function AddToggle(parent, text, config_table, key)
+        local Frame = Instance.new("Frame", parent)
+        Frame.Size = UDim2.new(0.95, 0, 0, 40)
+        Frame.BackgroundColor3 = Color3.fromRGB(32, 32, 32)
+        Instance.new("UICorner", Frame)
+        
+        local Label = Instance.new("TextLabel", Frame)
+        Label.Size = UDim2.new(0.7, 0, 1, 0)
+        Label.Position = UDim2.new(0, 10, 0, 0)
+        Label.Text = text
+        Label.TextColor3 = Color3.new(1, 1, 1)
+        Label.Font = Enum.Font.Gotham
+        Label.TextSize = 14
+        Label.TextXAlignment = Enum.TextXAlignment.Left
+        Label.BackgroundTransparency = 1
+
+        local Btn = Instance.new("TextButton", Frame)
+        Btn.Size = UDim2.new(0, 40, 0, 20)
+        Btn.Position = UDim2.new(1, -50, 0.5, -10)
+        Btn.Text = ""
+        Btn.BackgroundColor3 = config_table[key] and Color3.fromRGB(0, 120, 255) or Color3.fromRGB(60, 60, 60)
+        Instance.new("UICorner", Btn).CornerRadius = UDim.new(1, 0)
+
+        local Circle = Instance.new("Frame", Btn)
+        Circle.Size = UDim2.new(0, 16, 0, 16)
+        Circle.Position = config_table[key] and UDim2.new(1, -18, 0.5, -8) or UDim2.new(0, 2, 0.5, -8)
+        Circle.BackgroundColor3 = Color3.new(1, 1, 1)
+        Instance.new("UICorner", Circle).CornerRadius = UDim.new(1, 0)
+
+        Btn.MouseButton1Click:Connect(function()
+            config_table[key] = not config_table[key]
+            Btn.BackgroundColor3 = config_table[key] and Color3.fromRGB(0, 120, 255) or Color3.fromRGB(60, 60, 60)
+            Circle:TweenPosition(config_table[key] and UDim2.new(1, -18, 0.5, -8) or UDim2.new(0, 2, 0.5, -8), "Out", "Quad", 0.2)
+        end)
+    end
+
+    local function AddDropdown(parent, text, options, config_table, key, callback)
+        local Frame = Instance.new("Frame", parent)
+        Frame.Size = UDim2.new(0.95, 0, 0, 40)
+        Frame.BackgroundColor3 = Color3.fromRGB(32, 32, 32)
+        Instance.new("UICorner", Frame)
+
+        local Label = Instance.new("TextLabel", Frame)
+        Label.Size = UDim2.new(0.5, 0, 1, 0)
+        Label.Position = UDim2.new(0, 10, 0, 0)
+        Label.Text = text
+        Label.TextColor3 = Color3.new(1, 1, 1)
+        Label.Font = Enum.Font.Gotham
+        Label.TextSize = 14
+        Label.TextXAlignment = Enum.TextXAlignment.Left
+        Label.BackgroundTransparency = 1
+
+        local Btn = Instance.new("TextButton", Frame)
+        Btn.Size = UDim2.new(0.4, 0, 0, 25)
+        Btn.Position = UDim2.new(0.55, 0, 0.5, -12)
+        local current = config_table[key]
+        if typeof(current) == "Color3" then
+            Btn.Text = "Cor"
+            Btn.TextColor3 = current
+        else
+            Btn.Text = tostring(current)
+        end
+        Btn.BackgroundColor3 = Color3.fromRGB(45, 45, 45)
+        Instance.new("UICorner", Btn)
+
+        local count = 1
+        for i, v in ipairs(options) do if v == current then count = i end end
+
+        Btn.MouseButton1Click:Connect(function()
+            count = count + 1
+            if count > #options then count = 1 end
+            local selected = options[count]
+            config_table[key] = selected
+            
+            if typeof(selected) == "Color3" then
+                Btn.Text = "Cor"
+                Btn.TextColor3 = selected
+            else
+                Btn.Text = tostring(selected)
+            end
+            
+            if callback then callback(selected) end
+        end)
+    end
+
+    -- Tabs
+    local AimPage = CreateTab("Aimbot", 1)
+    local EspPage = CreateTab("ESP", 2)
+    local PlayerPage = CreateTab("Player", 3)
+
+    -- Aimbot Content
+    AddToggle(AimPage, "Enable Aimbot", _G.Config.Aimbot, "Enabled")
+    AddToggle(AimPage, "Team Check", _G.Config.Aimbot, "TeamCheck")
+    AddToggle(AimPage, "Instant Lock", _G.Config.Aimbot, "Instant")
+    AddDropdown(AimPage, "Target Part", {"Head", "HumanoidRootPart"}, _G.Config.Aimbot, "TargetPart")
+
+    -- ESP Content (Fix 4: Opção de Cores)
+    AddToggle(EspPage, "Enable ESP", _G.Config.ESP, "Enabled")
+    AddToggle(EspPage, "ESP Box", _G.Config.ESP, "Box")
+    AddToggle(EspPage, "ESP Nametag", _G.Config.ESP, "Names")
+    AddToggle(EspPage, "ESP Health", _G.Config.ESP, "Health")
+    AddToggle(EspPage, "Team Check", _G.Config.ESP, "TeamCheck")
+    
+    local colors = {
+        Color3.fromRGB(255, 0, 0), -- Red
+        Color3.fromRGB(0, 255, 0), -- Green
+        Color3.fromRGB(0, 0, 255), -- Blue
+        Color3.fromRGB(255, 255, 0), -- Yellow
+        Color3.fromRGB(255, 255, 255) -- White
+    }
+    AddDropdown(EspPage, "ESP Color", colors, _G.Config.ESP, "Color")
+
+    -- Player Content (Movimentação)
+    local function AddSlider(parent, text, min, max, config_table, key)
+        local Frame = Instance.new("Frame", parent)
+        Frame.Size = UDim2.new(0.95, 0, 0, 50)
+        Frame.BackgroundColor3 = Color3.fromRGB(32, 32, 32)
+        Instance.new("UICorner", Frame)
+
+        local Label = Instance.new("TextLabel", Frame)
+        Label.Size = UDim2.new(1, 0, 0, 20)
+        Label.Position = UDim2.new(0, 10, 0, 5)
+        Label.Text = text .. ": " .. tostring(config_table[key])
+        Label.TextColor3 = Color3.new(1, 1, 1)
+        Label.Font = Enum.Font.Gotham
+        Label.TextSize = 14
+        Label.TextXAlignment = Enum.TextXAlignment.Left
+        Label.BackgroundTransparency = 1
+
+        -- Slider logic could be added here if needed for WalkSpeed
+    end
+    
+    local wsBtn = Instance.new("TextButton", PlayerPage)
+    wsBtn.Size = UDim2.new(0.95, 0, 0, 40)
+    wsBtn.BackgroundColor3 = Color3.fromRGB(32, 32, 32)
+    wsBtn.Text = "Resetar Movimentação"
+    wsBtn.TextColor3 = Color3.new(1, 1, 1)
+    wsBtn.Font = Enum.Font.Gotham
+    wsBtn.TextSize = 14
+    Instance.new("UICorner", wsBtn)
+    wsBtn.MouseButton1Click:Connect(function()
+        pcall(function()
+            LocalPlayer.Character.Humanoid.WalkSpeed = 16
+            LocalPlayer.Character.Humanoid.JumpPower = 50
+        end)
+    end)
+
+    -- Default Tab
+    Tabs["Aimbot"].BackgroundColor3 = Color3.fromRGB(0, 120, 255)
+    Tabs["Aimbot"].TextColor3 = Color3.new(1, 1, 1)
+    Pages["Aimbot"].Visible = true
+
+    -- Iniciar ESP para players existentes
+    for _, p in pairs(Players:GetPlayers()) do CreateESP(p) end
+    Players.PlayerAdded:Connect(CreateESP)
+end
+
+-- INICIAR TUDO
+ShowLoadingScreen()
+
